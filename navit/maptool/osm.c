@@ -3062,6 +3062,7 @@ process_way2poi(FILE *in, FILE *out, int type)
 	struct item_bin *ib;
 	while ((ib=read_item(in))) {
 		int count=ib->clen/2;
+		processed_ways++;
 		if(count>1 && ib->type<type_line) {
 			struct coord *c=(struct coord *)(ib+1), c1, c2;
 			int done=0;

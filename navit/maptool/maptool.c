@@ -625,6 +625,9 @@ osm_count_references(struct maptool_params *p, char *suffix, int clear)
 {
 	int i,first=1;
 	fprintf(stderr,"%d slices\n",slices);
+	processed_nodes=processed_nodes_out=processed_ways=processed_relations=processed_tiles=0;
+	bytes_read=0;
+	sig_alrm(0);
 	for (i = slices-1 ; i>=0 ; i--) {
 		fprintf(stderr, "slice %d of %d\n",slices-i-1,slices-1);
 		if (!first) {
@@ -654,6 +657,7 @@ osm_count_references(struct maptool_params *p, char *suffix, int clear)
 		}
 		first=0;
 	}
+	sig_alrm_end();
 }
 
 
@@ -666,6 +670,7 @@ osm_resolve_coords_and_split_at_intersections(struct maptool_params *p, char *su
 	ways=tempfile(suffix,"ways",0);
 	for (i = 0 ; i < slices ; i++) {
 		int final=(i >= slices-1);
+		fprintf(stderr,"slice %d\n",i);
 		ways_split=tempfile(suffix,"ways_split",1);
 		ways_split_index=final ? tempfile(suffix,"ways_split_index",1) : NULL;
 		graph=tempfile(suffix,"graph",1);
@@ -695,6 +700,9 @@ osm_process_way2poi(struct maptool_params *p, char *suffix)
 	FILE *poly2poi=tempfile(suffix,"poly2poi_resolved",0);
 	FILE *line2poi=tempfile(suffix,"line2poi_resolved",0);
 	FILE *way2poi_result=tempfile(suffix,"way2poi_result",1);
+	processed_nodes=processed_nodes_out=processed_ways=processed_relations=processed_tiles=0;
+	bytes_read=0;
+	sig_alrm(0);
 	if (poly2poi) {
 		process_way2poi(poly2poi, way2poi_result, type_area);
 		fclose(poly2poi);
@@ -704,6 +712,7 @@ osm_process_way2poi(struct maptool_params *p, char *suffix)
 		fclose(line2poi);
 	}
 	fclose(way2poi_result);
+	sig_alrm_end();
 }
 
 static void

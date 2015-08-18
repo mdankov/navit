@@ -395,6 +395,7 @@ phase5(FILE **in, FILE **references, int in_count, int with_range, char *suffix,
 	size=0;
 	slices=0;
 	while (th) {
+		fprintf(stderr, "slice %d\n", slices);
 		th2=tile_head_root;
 		while (th2) {
 			th2->process=0;
