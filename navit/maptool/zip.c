@@ -449,6 +449,33 @@ zip_open(struct zip_info *info, char *out, char *dir, char *index)
 	return 1;
 }
 
+char *
+zip_get_state(struct zip_info *info)
+{
+	long long res2off, diroff, indexoff;
+	if(!info->res2 || !info->dir || !info->index)
+		return g_strdup("0:0:0");
+	res2off=ftello(info->res2);
+	diroff=ftello(info->dir);
+	indexoff=ftello(info->index);
+	return g_strdup_printf(LONGLONG_FMT":"LONGLONG_FMT":"LONGLONG_FMT,res2off,diroff,indexoff);
+}
+
+int
+zip_restore_state(struct zip_info *info, char *status)
+{
+	long long res2off, diroff, indexoff;
+	if(!info->res2 || !info->dir || !info->index)
+		return 0;
+	if(sscanf(status, LONGLONG_FMT":"LONGLONG_FMT":"LONGLONG_FMT,&res2off,&diroff,&indexoff)!=3)
+		return 0;
+	fseeko(info->res2, res2off, SEEK_SET);
+	fseeko(info->dir, diroff, SEEK_SET);
+	fseeko(info->index, indexoff, SEEK_SET);
+	return 1;
+}
+
+
 FILE *
 zip_get_index(struct zip_info *info)
 {

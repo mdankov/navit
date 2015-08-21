@@ -250,6 +250,7 @@ extern int unknown_country;
 extern int experimental;
 void sig_alrm(int sig);
 void sig_alrm_end(void);
+void save_state(char *fmt, ...);
 
 /* misc.c */
 extern struct rect world_bbox;
@@ -264,7 +265,7 @@ long long bbox_area(struct rect const *r);
 void phase1_map(GList *maps, FILE *out_ways, FILE *out_nodes);
 void dump(FILE *in);
 int phase4(FILE **in, int in_count, int with_range, char *suffix, FILE *tilesdir_out, struct zip_info *zip_info);
-int phase5(FILE **in, FILE **references, int in_count, int with_range, char *suffix, struct zip_info *zip_info);
+int phase5(FILE **in, FILE **references, int in_count, int with_range, char *suffix, struct zip_info *zip_info, int first_slice);
 void process_binfile(FILE *in, FILE *out);
 void add_aux_tiles(char *name, struct zip_info *info);
 void cat(FILE *in, FILE *out);
@@ -418,3 +419,7 @@ int zip_get_zipnum(struct zip_info *info);
 void zip_set_zipnum(struct zip_info *info, int num);
 void zip_close(struct zip_info *info);
 void zip_destroy(struct zip_info *info);
+char * zip_get_state(struct zip_info *info);
+int zip_restore_state(struct zip_info *info, char *status);
+
+
