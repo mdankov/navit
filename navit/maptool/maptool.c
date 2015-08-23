@@ -61,6 +61,8 @@ char ch_suffix[] ="r"; /* Used to make compiler happy due to Bug 35903 in gcc */
 char* experimental_feature_description = "Move coastline data to order 6 tiles. Makes map look more smooth, but may affect drawing/searching performance."; /* add description here */
 /** Indicates if experimental features (if available) were enabled. */
 int experimental;
+/** Indicates if maptool should exit after it has saved the checkpoint data. */
+int interrupt=0;
 
 struct buffer node_buffer = {
 	64*1024*1024,
@@ -212,15 +214,21 @@ sig_alrm_end(void)
 
 void save_state(char *fmt, ...)
 {
-   FILE *f=tempfile("","saved_state",1);
-   va_list ap;
-   fprintf(f, "%d:0", phase);
+	FILE *f=tempfile("","saved_state",1);
+	va_list ap;
+	fprintf(f, "%d:0", phase);
 
-   va_start(ap, fmt);
-   vfprintf(f, fmt, ap);
-   va_end(ap);
+	va_start(ap, fmt);
+	vfprintf(f, fmt, ap);
+	va_end(ap);
 
-   fclose(f);
+	fclose(f);
+
+	if(interrupt==1)
+		exit(0);
+	if(interrupt==2)
+		interrupt--;
+
 }
 
 static struct files_relation_processing *
@@ -296,6 +304,7 @@ usage(FILE *f)
 	fprintf(f,"-6 (--64bit)                      : set zip 64 bit compression\n");
 	fprintf(f,"-a (--attr-debug-level)  <level>  : control which data is included in the debug attribute\n");
 	fprintf(f,"-c (--dump-coordinates)           : dump coordinates after phase 1\n");
+	fprintf(f,"-C (--continue)                   : continue execution from the point specified in saved_state_.tmp file\n");
 #ifdef HAVE_POSTGRESQL
 	fprintf(f,"-d (--db) <conn. string>          : get osm data out of a postgresql database with osm simple scheme and given connect string\n");
 #endif
@@ -303,6 +312,7 @@ usage(FILE *f)
 	fprintf(f,"-E (--experimental)               : Enable experimental features (%s)\n",
 		experimental_feature_description ? experimental_feature_description : "-not available in this version-");
 	fprintf(f,"-i (--input-file) <file>          : specify the input file name (OSM), overrules default stdin\n");
+	fprintf(f,"-I (--interrupt)                  : interrupt execution after checkpoint is stored to saved_state_.tmp file\n");
 	fprintf(f,"-k (--keep-tmpfiles)              : do not delete tmp files after processing. useful to reuse them\n");
 	fprintf(f,"-M (--o5m)                        : input file os o5m\n");
 	fprintf(f,"-N (--nodes-only)                 : process only nodes\n");
@@ -317,7 +327,6 @@ usage(FILE *f)
 	fprintf(f,"-U (--unknown-country)            : add objects with unknown country to index\n");
 	fprintf(f,"-x (--index-size)                 : set maximum country index size in bytes\n");
 	fprintf(f,"-z (--compression-level) <level>  : set the compression level\n");
-	fprintf(f,"-C (--continue)                   : continue execution from the point specified in saved_state_.tmp file\n");
 	fprintf(f,"Internal options (undocumented):\n");                                                                      
 	fprintf(f,"-b (--binfile)\n");                                                                                        
 	fprintf(f,"-B \n");                                                                                                   
@@ -374,6 +383,7 @@ parse_option(struct maptool_params *p, char **argv, int argc, int *option_index)
 		{"attr-debug-level", 1, 0, 'a'},
 		{"binfile", 0, 0, 'b'},
 		{"compression-level", 1, 0, 'z'},
+		{"continue", 0, 0, 'C'},
 #ifdef HAVE_POSTGRESQL
 		{"db", 1, 0, 'd'},
 #endif
@@ -392,6 +402,7 @@ parse_option(struct maptool_params *p, char **argv, int argc, int *option_index)
 		{"start", 1, 0, 's'},
 		{"timestamp", 1, 0, 't'},
 		{"input-file", 1, 0, 'i'},
+		{"interrupt", 1, 0, 'I'},
 		{"rule-file", 1, 0, 'r'},
 		{"ignore-unknown", 0, 0, 'n'},
 		{"url", 1, 0, 'u'},
@@ -399,14 +410,13 @@ parse_option(struct maptool_params *p, char **argv, int argc, int *option_index)
 		{"slice-size", 1, 0, 'S'},
 		{"unknown-country", 0, 0, 'U'},
 		{"index-size", 0, 0, 'x'},
-		{"continue", 0, 0, 'C'},
 		{0, 0, 0, 0}
 	};
 	c = getopt_long (argc, argv, "5:6B:DEMNO:PS:Wa:bc"
 #ifdef HAVE_POSTGRESQL
 				      "d:"
 #endif
-				      "e:hi:knm:p:r:s:t:wu:z:Ux:C", long_options, option_index);
+				      "e:hi:knm:p:r:s:t:wu:z:Ux:CI", long_options, option_index);
 	if (c == -1)
 		return 1;
 	switch (c) {
@@ -527,6 +537,9 @@ parse_option(struct maptool_params *p, char **argv, int argc, int *option_index)
 	case 'w':
 		dedupe_ways_hash=g_hash_table_new(NULL, NULL);
 		break;
+	case 'I':
+		interrupt=2;
+		break;
 	case 'i':
 		p->input_file = fopen( optarg, "r" );
 		if (p->input_file ==  NULL )
@@ -571,7 +584,6 @@ start_phase(struct maptool_params *p, char *str)
 		progress_time();
 		progress_memory();
 		fprintf(stderr,"\n");
-		save_state("");
 		return 1;
 	} else
 		return 0;
@@ -1039,6 +1051,7 @@ int main(int argc, char **argv)
 	// input from an OSM file
 	if (p.input == 0) {
 		if (start_phase(&p, "reading input data")) {
+			save_state("");
 			osm_read_input_data(&p, suffix);
 			p.node_table_loaded=1;
 			saved_state[0]=0;
@@ -1049,6 +1062,7 @@ int main(int argc, char **argv)
 			saved_state[0]=0;
 		}
 		if (start_phase(&p,"converting ways to pois")) {
+			save_state("");
 			osm_process_way2poi(&p, suffix);
 			saved_state[0]=0;
 		}
@@ -1074,11 +1088,13 @@ int main(int argc, char **argv)
 	}
 
 	if (start_phase(&p,"generating coastlines")) {
+		save_state("");
 		osm_process_coastlines(&p, suffix);
 		saved_state[0]=0;
 	}
 	if (start_phase(&p,"assigning towns to countries")) {
 		FILE *towns=tempfile(suffix,"towns",0),*boundaries=NULL,*ways=NULL;
+		save_state("");
 		if (towns) {
 			boundaries=tempfile(suffix,"boundaries",0);
 			ways=tempfile(suffix,"ways_split",0);
@@ -1092,11 +1108,13 @@ int main(int argc, char **argv)
 		saved_state[0]=0;
 	}
 	if (start_phase(&p,"sorting countries")) {
+		save_state("");
 		sort_countries(p.keep_tmpfiles);
 		p.countries_loaded=1;
 		saved_state[0]=0;
 	}
 	if (start_phase(&p,"generating turn restrictions")) {
+		save_state("");
 		if (p.process_relations) {
 			osm_process_turn_restrictions(&p, suffix);
 		}
@@ -1105,6 +1123,7 @@ int main(int argc, char **argv)
 		saved_state[0]=0;
 	}
 	if (p.process_relations && p.process_ways && p.process_nodes && start_phase(&p,"processing associated street relations")) {
+		save_state("");
 		struct files_relation_processing *files_relproc = files_relation_processing_new(p.osm.line2poi, suffix); 
 		p.osm.associated_streets=tempfile(suffix,"associated_streets",0);
 		if (p.osm.associated_streets) {
@@ -1120,6 +1139,7 @@ int main(int argc, char **argv)
 		saved_state[0]=0;
 	}
 	if (p.process_relations && p.process_ways && p.process_nodes && start_phase(&p,"processing house number interpolations")) {
+		save_state("");
 		// OSM house number interpolations are handled like a relation.
 		struct files_relation_processing *files_relproc = files_relation_processing_new(p.osm.line2poi, suffix); 
 		p.osm.house_number_interpolations=tempfile(suffix,"house_number_interpolations",0);
@@ -1160,6 +1180,7 @@ int main(int argc, char **argv)
 	for (i = suffix_start ; i < suffix_count ; i++) {
 		suffix=suffixes[i];
 		if (start_phase(&p,"generating tiles")) {
+			save_state("");
 			maptool_load_countries(&p);
 			maptool_generate_tiles(&p, suffix, filenames, filename_count, i == suffix_start, suffixes[0]);
 			p.tilesdir_loaded=1;
