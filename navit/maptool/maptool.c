@@ -861,6 +861,8 @@ maptool_assemble_map(struct maptool_params *p, char *suffix, char **filenames, c
 	if (first) {
 		char *zipdir=tempfile_name("zipdir","");
 		char *zipindex=tempfile_name("index","");
+		//char *state=strchr(saved_state,':');
+		//state=state?strchr(state+1,':')+1:"";
 		zip_info=zip_new();
 		zip_set_zip64(zip_info, p->zip64);
 		zip_set_timestamp(zip_info, p->timestamp);
@@ -868,7 +870,7 @@ maptool_assemble_map(struct maptool_params *p, char *suffix, char **filenames, c
 		zip_set_compression_level(zip_info, p->compression_level);
 		if (p->md5file) 
 			zip_set_md5(zip_info, 1);
-		if(!zip_open(zip_info, p->result, zipdir, zipindex)) {
+		if(!zip_open(zip_info, p->result, zipdir, zipindex, saved_state)) {
 			fprintf(stderr,"Fatal: Could not write output file.\n");
 			exit(1);
 		}
@@ -876,9 +878,7 @@ maptool_assemble_map(struct maptool_params *p, char *suffix, char **filenames, c
 			map_information_attrs[1].type=attr_url;
 			map_information_attrs[1].u.str=p->url;
 		}
-		if(*saved_state && strchr(saved_state,':')!=NULL)
-			zip_restore_state(zip_info, strchr(saved_state,':')+1);
-		else
+		if(!*saved_state)
 			index_init(zip_info, 1);
 	}
 	if (!strcmp(suffix,ch_suffix)) {  /* Makes compiler happy due to bug 35903 in gcc */

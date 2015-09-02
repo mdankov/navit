@@ -413,13 +413,12 @@ void zip_set_maxnamelen(struct zip_info *info, int max);
 int zip_get_maxnamelen(struct zip_info *info);
 int zip_add_member(struct zip_info *info);
 int zip_set_timestamp(struct zip_info *info, char *timestamp);
-int zip_open(struct zip_info *info, char *out, char *dir, char *index);
+int zip_open(struct zip_info *info, char *out, char *dir, char *index, char *state);
 FILE *zip_get_index(struct zip_info *info);
 int zip_get_zipnum(struct zip_info *info);
 void zip_set_zipnum(struct zip_info *info, int num);
 void zip_close(struct zip_info *info);
 void zip_destroy(struct zip_info *info);
 char * zip_get_state(struct zip_info *info);
-int zip_restore_state(struct zip_info *info, char *status);
 
 

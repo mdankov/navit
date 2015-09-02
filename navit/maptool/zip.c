@@ -428,25 +428,42 @@ zip_set_timestamp(struct zip_info *info, char *timestamp)
 	return 0;
 }
 
-int
-zip_open(struct zip_info *info, char *out, char *dir, char *index)
+static int
+zip_restore_state(struct zip_info *info, char *state)
 {
-	info->res2=fopen(out,"wb+");
+	long long slice, res2off, diroff, indexoff;
+	if(!info->res2 || !info->dir || !info->index)
+		return 0;
+	if(sscanf(state, LONGLONG_FMT":"LONGLONG_FMT":"LONGLONG_FMT":"LONGLONG_FMT":%d:%d:"LONGLONG_FMT,
+			 &slice, &res2off, &diroff, &indexoff, &info->zipnum, &info->dir_size, &info->offset)!=7)
+		return 0;
+	fseeko(info->res2, res2off, SEEK_SET);
+	fseeko(info->dir, diroff, SEEK_SET);
+	fseeko(info->index, indexoff, SEEK_SET);
+	fprintf(stderr,"Rewinded zip to"LONGLONG_FMT":"LONGLONG_FMT":"LONGLONG_FMT"\n",res2off,diroff,indexoff);
+	return 1;
+}
+
+int
+zip_open(struct zip_info *info, char *out, char *dir, char *index, char *state)
+{
+	char *mode=*state?"rb+":"wb+";
+	info->res2=fopen(out,mode);
 	if(!info->res2) {
 		fprintf(stderr,"Could not open output zip file %s\n", out);
 		return 0;
 	}
-	info->dir=fopen(dir,"wb+");
+	info->dir=fopen(dir,mode);
 	if(!info->dir) {
 		fprintf(stderr,"Could not open zip directory %s\n", dir);
 		return 0;
 	}
-	info->index=fopen(index,"wb+");
+	info->index=fopen(index,mode);
 	if(!info->index) {
 		fprintf(stderr,"Could not open index %s\n", index);
 		return 0;
 	}
-	return 1;
+	return *state ? zip_restore_state(info, state) : 1;
 }
 
 char *
@@ -458,21 +475,8 @@ zip_get_state(struct zip_info *info)
 	res2off=ftello(info->res2);
 	diroff=ftello(info->dir);
 	indexoff=ftello(info->index);
-	return g_strdup_printf(LONGLONG_FMT":"LONGLONG_FMT":"LONGLONG_FMT,res2off,diroff,indexoff);
-}
-
-int
-zip_restore_state(struct zip_info *info, char *status)
-{
-	long long res2off, diroff, indexoff;
-	if(!info->res2 || !info->dir || !info->index)
-		return 0;
-	if(sscanf(status, LONGLONG_FMT":"LONGLONG_FMT":"LONGLONG_FMT,&res2off,&diroff,&indexoff)!=3)
-		return 0;
-	fseeko(info->res2, res2off, SEEK_SET);
-	fseeko(info->dir, diroff, SEEK_SET);
-	fseeko(info->index, indexoff, SEEK_SET);
-	return 1;
+	return g_strdup_printf(LONGLONG_FMT":"LONGLONG_FMT":"LONGLONG_FMT":%d:%d:"LONGLONG_FMT,
+		res2off,diroff,indexoff, info->zipnum, info->dir_size, info->offset);
 }
 
 
