@@ -225,10 +225,7 @@ void save_state(char *fmt, ...)
 	fclose(f);
 
 	if(interrupt==1)
-		exit(0);
-	if(interrupt==2)
-		interrupt--;
-
+		exit(100);
 }
 
 static struct files_relation_processing *
@@ -312,7 +309,7 @@ usage(FILE *f)
 	fprintf(f,"-E (--experimental)               : Enable experimental features (%s)\n",
 		experimental_feature_description ? experimental_feature_description : "-not available in this version-");
 	fprintf(f,"-i (--input-file) <file>          : specify the input file name (OSM), overrules default stdin\n");
-	fprintf(f,"-I (--interrupt)                  : interrupt execution after checkpoint is stored to saved_state_.tmp file\n");
+	fprintf(f,"-I (--interrupt)                  : interrupt execution with exit code 100 after checkpoint is stored to saved_state_.tmp file\n");
 	fprintf(f,"-k (--keep-tmpfiles)              : do not delete tmp files after processing. useful to reuse them\n");
 	fprintf(f,"-M (--o5m)                        : input file os o5m\n");
 	fprintf(f,"-N (--nodes-only)                 : process only nodes\n");
@@ -538,7 +535,7 @@ parse_option(struct maptool_params *p, char **argv, int argc, int *option_index)
 		dedupe_ways_hash=g_hash_table_new(NULL, NULL);
 		break;
 	case 'I':
-		interrupt=2;
+		interrupt=1;
 		break;
 	case 'i':
 		p->input_file = fopen( optarg, "r" );
@@ -584,6 +581,10 @@ start_phase(struct maptool_params *p, char *str)
 		progress_time();
 		progress_memory();
 		fprintf(stderr,"\n");
+		if(p->start<phase) {
+			save_state("");
+			*saved_state=0;
+		}
 		return 1;
 	} else
 		return 0;
@@ -679,7 +680,6 @@ osm_count_references(struct maptool_params *p, char *suffix, int clear)
 	}
 	for (; i>=0 ; i--) {
 		fprintf(stderr, "slice %d of %d\n",slices-i-1,slices-1);
-		save_state("%d",slices-i-1);
 		if (!first) {
 			FILE *ways=tempfile(suffix,"ways",0);
 			load_buffer("coords.tmp",&node_buffer, i*slice_size, slice_size);
@@ -706,6 +706,7 @@ osm_count_references(struct maptool_params *p, char *suffix, int clear)
 			tempfile_unlink(suffix,"line2poi");
 		}
 		first=0;
+		save_state("%d",slices-i);
 	}
 	sig_alrm_end();
 }
@@ -724,7 +725,6 @@ osm_resolve_coords_and_split_at_intersections(struct maptool_params *p, char *su
 		else
 			ways=tempfile(suffix,"ways_to_resolve",0);
 		fprintf(stderr,"slice %d\n",i);
-		save_state("%d",i);
 		ways_split=tempfile(suffix,"ways_split",1);
 		ways_split_index=final ? tempfile(suffix,"ways_split_index",1) : NULL;
 		graph=tempfile(suffix,"graph",1);
@@ -741,6 +741,7 @@ osm_resolve_coords_and_split_at_intersections(struct maptool_params *p, char *su
 		if (! final) {
 			tempfile_rename(suffix,"ways_split","ways_to_resolve");
 		}
+		save_state("%d",i+1);
 	}
 	if(!p->keep_tmpfiles)
 		tempfile_unlink(suffix,"ways");
@@ -861,8 +862,6 @@ maptool_assemble_map(struct maptool_params *p, char *suffix, char **filenames, c
 	if (first) {
 		char *zipdir=tempfile_name("zipdir","");
 		char *zipindex=tempfile_name("index","");
-		//char *state=strchr(saved_state,':');
-		//state=state?strchr(state+1,':')+1:"";
 		zip_info=zip_new();
 		zip_set_zip64(zip_info, p->zip64);
 		zip_set_timestamp(zip_info, p->timestamp);
@@ -1051,26 +1050,20 @@ int main(int argc, char **argv)
 	// input from an OSM file
 	if (p.input == 0) {
 		if (start_phase(&p, "reading input data")) {
-			save_state("");
 			osm_read_input_data(&p, suffix);
 			p.node_table_loaded=1;
-			saved_state[0]=0;
 		}
 		if (start_phase(&p, "counting references and resolving ways")) {
 			maptool_load_node_table(&p,1);
 			osm_count_references(&p, suffix, p.start == phase);
-			saved_state[0]=0;
 		}
 		if (start_phase(&p,"converting ways to pois")) {
-			save_state("");
 			osm_process_way2poi(&p, suffix);
-			saved_state[0]=0;
 		}
 		if (start_phase(&p,"splitting at intersections")) {
 			if (p.process_ways) {
 				maptool_load_node_table(&p,0);
 				osm_resolve_coords_and_split_at_intersections(&p, suffix);
-				saved_state[0]=0;
 			}
 		}
 		free(node_buffer.base);
@@ -1083,18 +1076,14 @@ int main(int argc, char **argv)
 			FILE *ways_split=tempfile(suffix,"ways_split",1);
 			process_binfile(stdin, ways_split);
 			fclose(ways_split);
-			saved_state[0]=0;
 		}
 	}
 
 	if (start_phase(&p,"generating coastlines")) {
-		save_state("");
 		osm_process_coastlines(&p, suffix);
-		saved_state[0]=0;
 	}
 	if (start_phase(&p,"assigning towns to countries")) {
 		FILE *towns=tempfile(suffix,"towns",0),*boundaries=NULL,*ways=NULL;
-		save_state("");
 		if (towns) {
 			boundaries=tempfile(suffix,"boundaries",0);
 			ways=tempfile(suffix,"ways_split",0);
@@ -1105,25 +1094,19 @@ int main(int argc, char **argv)
 			if(!p.keep_tmpfiles)
 				tempfile_unlink(suffix,"towns");
 		}
-		saved_state[0]=0;
 	}
 	if (start_phase(&p,"sorting countries")) {
-		save_state("");
 		sort_countries(p.keep_tmpfiles);
 		p.countries_loaded=1;
-		saved_state[0]=0;
 	}
 	if (start_phase(&p,"generating turn restrictions")) {
-		save_state("");
 		if (p.process_relations) {
 			osm_process_turn_restrictions(&p, suffix);
 		}
 		if(!p.keep_tmpfiles)
 			tempfile_unlink(suffix,"ways_split_index");
-		saved_state[0]=0;
 	}
 	if (p.process_relations && p.process_ways && p.process_nodes && start_phase(&p,"processing associated street relations")) {
-		save_state("");
 		struct files_relation_processing *files_relproc = files_relation_processing_new(p.osm.line2poi, suffix); 
 		p.osm.associated_streets=tempfile(suffix,"associated_streets",0);
 		if (p.osm.associated_streets) {
@@ -1136,10 +1119,8 @@ int main(int argc, char **argv)
 				tempfile_unlink(suffix,"associated_streets");
 			}
 		}
-		saved_state[0]=0;
 	}
 	if (p.process_relations && p.process_ways && p.process_nodes && start_phase(&p,"processing house number interpolations")) {
-		save_state("");
 		// OSM house number interpolations are handled like a relation.
 		struct files_relation_processing *files_relproc = files_relation_processing_new(p.osm.line2poi, suffix); 
 		p.osm.house_number_interpolations=tempfile(suffix,"house_number_interpolations",0);
@@ -1153,7 +1134,6 @@ int main(int argc, char **argv)
 				tempfile_unlink(suffix,"house_number_interpolations");
 			}
 		}
-		saved_state[0]=0;
 	}
 	if (p.output == 1 && start_phase(&p,"dumping")) {
 		maptool_dump(&p, suffix);
@@ -1180,24 +1160,19 @@ int main(int argc, char **argv)
 	for (i = suffix_start ; i < suffix_count ; i++) {
 		suffix=suffixes[i];
 		if (start_phase(&p,"generating tiles")) {
-			save_state("");
 			maptool_load_countries(&p);
 			maptool_generate_tiles(&p, suffix, filenames, filename_count, i == suffix_start, suffixes[0]);
 			p.tilesdir_loaded=1;
-			saved_state[0]=0;
 		}
 		if (start_phase(&p,"assembling map")) {
 			maptool_load_countries(&p);
 			maptool_load_tilesdir(&p, suffix);
 			maptool_assemble_map(&p, suffix, filenames, referencenames, filename_count, i == suffix_start, i == suffix_count-1, suffixes[0]);
-			saved_state[0]=0;
 		}
 		phase-=2;
 	}
 	phase+=2;
-	start_phase(&p,"done");
-
-	if(!p.keep_tmpfiles)
+	if(start_phase(&p,"done"))
 		tempfile_unlink(suffix,"saved_state");
 
 	return 0;

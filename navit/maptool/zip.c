@@ -447,7 +447,7 @@ zip_restore_state(struct zip_info *info, char *state)
 int
 zip_open(struct zip_info *info, char *out, char *dir, char *index, char *state)
 {
-	char *mode=*state?"rb+":"wb+";
+	char *mode=strchr(state,":")?"rb+":"wb+";
 	info->res2=fopen(out,mode);
 	if(!info->res2) {
 		fprintf(stderr,"Could not open output zip file %s\n", out);
@@ -463,7 +463,9 @@ zip_open(struct zip_info *info, char *out, char *dir, char *index, char *state)
 		fprintf(stderr,"Could not open index %s\n", index);
 		return 0;
 	}
-	return *state ? zip_restore_state(info, state) : 1;
+	if(*state)
+		 zip_restore_state(info, state);
+	return 1;
 }
 
 char *
@@ -471,14 +473,13 @@ zip_get_state(struct zip_info *info)
 {
 	long long res2off, diroff, indexoff;
 	if(!info->res2 || !info->dir || !info->index)
-		return g_strdup("0:0:0");
+		return g_strdup("");
 	res2off=ftello(info->res2);
 	diroff=ftello(info->dir);
 	indexoff=ftello(info->index);
 	return g_strdup_printf(LONGLONG_FMT":"LONGLONG_FMT":"LONGLONG_FMT":%d:%d:"LONGLONG_FMT,
 		res2off,diroff,indexoff, info->zipnum, info->dir_size, info->offset);
 }
-
 
 FILE *
 zip_get_index(struct zip_info *info)

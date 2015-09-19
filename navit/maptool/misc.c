@@ -395,30 +395,30 @@ phase5(FILE **in, FILE **references, int in_count, int with_range, char *suffix,
 	size=0;
 	slices=0;
 	while (th) {
-		char *zip_state=zip_get_state(zip_info);
-		fprintf(stderr, "slice %d\n", slices);
-		save_state("%d:%s",slices,zip_state);
-		g_free(zip_state);
 		th2=tile_head_root;
 		while (th2) {
 			th2->process=0;
 			th2=th2->next;
 		}
 		size=0;
-		written_tiles=0;
 		while (th && size+th->total_size < slice_size) {
 			size+=th->total_size;
 			th->process=1;
-			if(th->name[0])
-				written_tiles++;
 			th=th->next;
 		}
-		/* process_slice() modifies zip_info, but need to retain old info */
-		zipnum=zip_get_zipnum(zip_info);
-		if(slices>=first_slice)
+		if(slices>=first_slice) {
+			/* process_slice() modifies zip_info, but need to retain old info */
+			zipnum=zip_get_zipnum(zip_info);
 			written_tiles=process_slice(in, references, in_count, with_range, size, suffix, zip_info);
-		zip_set_zipnum(zip_info, zipnum+written_tiles);
+			zip_set_zipnum(zip_info, zipnum+written_tiles);
+		}
 		slices++;
+		if(slices>first_slice) {
+			char *zip_state=zip_get_state(zip_info);
+			fprintf(stderr, "slice %d\n", slices);
+			save_state("%d:%s",slices,zip_state);
+			g_free(zip_state);
+		}
 	}
 	return 0;
 }
