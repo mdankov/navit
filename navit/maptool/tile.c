@@ -429,7 +429,7 @@ add_tile_hash(struct tile_head *th)
 
 		data = th_get_subtile( th, idx );
 
-		if (debug_tile(((char *)data)) || debug_tile(th->name)) {
+		if (debug_tile(*data) || debug_tile(th->name)) {
 			fprintf(stderr,"Parent for '%s' is '%s'\n", *data, th->name);
 		}
 
@@ -485,13 +485,14 @@ void
 load_tilesdir(FILE *in)
 {
 	char tile[32],subtile[32],c;
-	int size,zipnum=0;
+	int size,zipnum=0,line=0;
 	struct tile_head **last;
 	create_tile_hash();
 	tile_hash=g_hash_table_new(g_str_hash, g_str_equal);
 	last=&tile_head_root;
 	while (fscanf(in,"%[^:]:%d",tile,&size) == 2) {
 		struct tile_head *th=malloc(sizeof(struct tile_head));
+		line++;
 		if (!strcmp(tile,"index"))
 			tile[0]='\0';
 		th->num_subtiles=0;
@@ -516,7 +517,8 @@ load_tilesdir(FILE *in)
 		add_tile_hash(th);
 		g_hash_table_insert(tile_hash, th->name, th);
 		if (fread(&c, 1, 1, in) != 1 || c != '\n') {
-			printf("syntax error\n");
+			fprintf(stderr, "syntax error parsing line %d of tilesdir\n", line);
+			exit(1);
 		}
 	}
 	*last=NULL;
@@ -544,8 +546,7 @@ write_tilesdir(struct tile_info *info, struct zip_info *zip_info, FILE *out)
 			next=g_list_next(next);
 		}
 	}
-	len=maxlen;
-	while (len >= 0) {
+	for (len=maxlen;len >= 0;len--) {
 #if 0
 		fprintf(stderr,"PROGRESS: collecting tiles with len=%d\n", len);
 #endif
@@ -574,7 +575,6 @@ write_tilesdir(struct tile_info *info, struct zip_info *zip_info, FILE *out)
 			}
 			next=g_list_next(next);
 		}
-		len--;
 	}
 	g_list_free(tiles_list);
 	if (info->suffix[0] && info->write) {
