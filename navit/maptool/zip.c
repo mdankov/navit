@@ -447,7 +447,7 @@ zip_restore_state(struct zip_info *info, char *state)
 int
 zip_open(struct zip_info *info, char *out, char *dir, char *index, char *state)
 {
-	char *mode=strchr(state,":")?"rb+":"wb+";
+	char *mode=strchr(state,':')?"rb+":"wb+";
 	info->res2=fopen(out,mode);
 	if(!info->res2) {
 		fprintf(stderr,"Could not open output zip file %s\n", out);
