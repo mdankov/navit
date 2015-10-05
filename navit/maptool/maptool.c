@@ -593,6 +593,7 @@ start_phase(struct maptool_params *p, char *str)
 static void
 osm_read_input_data(struct maptool_params *p, char *suffix)
 {
+	sig_alrm(0);
 	unlink("coords.tmp");
 	if (p->process_ways)
 		p->osm.ways=tempfile(suffix,"ways",1);
@@ -660,6 +661,8 @@ osm_read_input_data(struct maptool_params *p, char *suffix)
 		fclose(p->osm.line2poi);
 	if (p->osm.towns)
 		fclose(p->osm.towns);
+	sig_alrm(0);
+	sig_alrm_end();
 }
 int debug_ref=0;
 
